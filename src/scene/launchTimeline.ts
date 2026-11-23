@@ -25,7 +25,7 @@ export const parkedVehicles = [
   { z: 24, kind: 'sedan', color: '#a7483e' },
   { z: 20, kind: 'semi', color: '#dce1e8' },
   { z: 16.1, kind: 'pickup', color: '#8b9aaa' },
-  { z: 13.9, kind: 'cab', color: '#d5a448' },
+  { z: 14.21, kind: 'cab', color: '#d5a448' },
 ] as const;
 
 // The vehicle holds its flight pose throughout the animated inspection.
@@ -112,7 +112,7 @@ export function flightPose(t: number): Pose {
       : t < lineup.touch
         ? hermite(33.4, 9.7, -4.1, -2.35, lineup.touch - lineup.lift, t - lineup.lift)
         : hermite(9.7, startZ, -2.35, 0, -lineup.touch, t - lineup.touch);
-    const y = 5.05 * chapterWindow(t, lineup.lift, -6.20, -1.45, lineup.touch) + 0.42 * chapterWindow(t, lineup.flip, -5.70, -4.90, lineup.upright)
+    const y = 5.05 * chapterWindow(t, lineup.lift, -6.20, -1.38, lineup.touch) + 0.42 * chapterWindow(t, lineup.flip, -5.70, -4.90, lineup.upright)
       - 0.012 * chapterWindow(t, lineup.touch, -0.46, -0.41, -0.27);
     const pitch = 0.19 * chapterWindow(t, lineup.lift, -6.62, -6.35, -5.95)
       - 0.09 * chapterWindow(t, -1.9, -1.4, -0.95, lineup.touch);
@@ -187,6 +187,7 @@ export function wheelRotation(p: number) {
 
 export const launchPower = (p: number) =>
   chapterWindow(maneuverSeconds(p), flight.boost - 0.03, 12.60, 17.65, 18.50);
+
 
 
 
