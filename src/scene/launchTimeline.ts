@@ -9,7 +9,7 @@ export const RAMP_HALF_WIDTH = 2.43;
 
 export const montage = {
   cabin: 0, flow: 0.026, scan: 0.052, nozzle: 0.081, silhouette: 0.107, lightbar: 0.144,
-  overhead: 0.178, lineup: 0.213, approach: 0.251, track: 0.276, crest: 0.312, fly: 0.352,
+  overhead: 0.178, lineup: 0.207, jump: 0.232, approach: 0.251, track: 0.276, crest: 0.312, fly: 0.352,
 } as const;
 
 export const flight = {
@@ -18,10 +18,19 @@ export const flight = {
 } as const;
 
 export const INSPECTION_SECONDS = 10;
+export const LINEUP_Z = 38;
+export const lineup = { start: -9, spool: -7.4, lift: -7.32, flip: -5.92, upright: -3.25, touch: -0.52, end: 0 };
+export const parkedVehicles = [
+  { z: 27.1, kind: 'sedan', color: '#9eafc6' },
+  { z: 24, kind: 'sedan', color: '#a7483e' },
+  { z: 20, kind: 'semi', color: '#dce1e8' },
+  { z: 16.1, kind: 'pickup', color: '#8b9aaa' },
+  { z: 13.9, kind: 'cab', color: '#d5a448' },
+] as const;
 
 // The vehicle holds its flight pose throughout the animated inspection.
 const replayClock = [
-  [0, -8.4], [montage.lineup, 0], [montage.approach, flight.move], [montage.track, flight.ramp],
+  [0, -17.4], [montage.lineup, lineup.start], [montage.jump, lineup.flip], [0.249, lineup.end], [montage.approach, flight.move], [montage.track, flight.ramp],
   [montage.crest, flight.hang], [0.337, flight.boost], [montage.fly, flight.exit], [0.38, flight.upright],
   [HANDOFF, flight.hover], [0.45, flight.hover + 0.75], [0.66, flight.hover + 4.3],
   [0.73, flight.hover + 6.7], [LANDING, flight.hover + INSPECTION_SECONDS],
@@ -96,9 +105,21 @@ const offVz = -Math.cos(exitAngle) * (RADIUS - 0.14) * crestSpeed;
 const caughtAt = 14.88;
 
 export function flightPose(t: number): Pose {
-  if (t < flight.move) {
-    return { x: 0, y: restY, z: startZ * smoothstep(-1.8, 0, t), pitch: 0, yaw: 0, roll: 0 };
+  if (t <= lineup.start) return { x: 0, y: restY, z: LINEUP_Z, pitch: 0, yaw: 0, roll: 0 };
+  if (t < lineup.end) {
+    const z = t < lineup.lift
+      ? hermite(LINEUP_Z, 33.4, 0, -4.1, lineup.lift - lineup.start, t - lineup.start)
+      : t < lineup.touch
+        ? hermite(33.4, 9.7, -4.1, -2.35, lineup.touch - lineup.lift, t - lineup.lift)
+        : hermite(9.7, startZ, -2.35, 0, -lineup.touch, t - lineup.touch);
+    const y = 5.05 * chapterWindow(t, lineup.lift, -6.20, -1.45, lineup.touch) + 0.42 * chapterWindow(t, lineup.flip, -5.70, -4.90, lineup.upright)
+      - 0.012 * chapterWindow(t, lineup.touch, -0.46, -0.41, -0.27);
+    const pitch = 0.19 * chapterWindow(t, lineup.lift, -6.62, -6.35, -5.95)
+      - 0.09 * chapterWindow(t, -1.9, -1.4, -0.95, lineup.touch);
+    const roll = Math.PI * 2 * smoothstep(lineup.flip, lineup.upright, t);
+    return { x: 0, y: restY + y, z, pitch, yaw: 0, roll };
   }
+  if (t < flight.move) return { x: 0, y: restY, z: startZ, pitch: 0, yaw: 0, roll: 0 };
   if (t < flight.ramp) {
     const span = flight.ramp - flight.move;
     const z = hermite(startZ, RAMP_START, 0, -6.35, span, t - flight.move);
@@ -153,11 +174,20 @@ export const launchPose = (p: number) => flightPose(maneuverSeconds(p));
 export function wheelRotation(p: number) {
   const t = maneuverSeconds(p);
   const pose = flightPose(t);
-  if (t < flight.ramp) return pose.z / wheelRadius;
-  if (t <= flight.exit) return (RAMP_START - (RADIUS - wheelRadius) * pose.pitch) / wheelRadius;
+  if (t < lineup.lift) return (pose.z - LINEUP_Z) / wheelRadius;
+  const jumpSpin = (33.4 - LINEUP_Z) / wheelRadius
+    - 4.8 * smoothstep(lineup.lift, lineup.upright, t);
+  if (t < lineup.touch) return jumpSpin;
+  const wheelOffset = jumpSpin - 9.7 / wheelRadius;
+  if (t < flight.ramp) return pose.z / wheelRadius + wheelOffset;
+  if (t <= flight.exit) return (RAMP_START - (RADIUS - wheelRadius) * pose.pitch) / wheelRadius + wheelOffset;
   const end = (RAMP_START - (RADIUS - wheelRadius) * exitAngle) / wheelRadius;
-  return end - 1.15 * smoothstep(flight.exit, 14.12, t) - Math.max(0, pose.z - touchZ) / wheelRadius * smoothstep(flight.touch, flight.touch + 0.01, t);
+  return end + wheelOffset - 1.15 * smoothstep(flight.exit, 14.12, t) - Math.max(0, pose.z - touchZ) / wheelRadius * smoothstep(flight.touch, flight.touch + 0.01, t);
 }
 
 export const launchPower = (p: number) =>
   chapterWindow(maneuverSeconds(p), flight.boost - 0.03, 12.60, 17.65, 18.50);
+
+
+
+

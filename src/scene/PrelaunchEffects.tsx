@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { ProgressRef } from '../types';
 import { createSmokeTexture } from './geometry';
-import { montage } from './launchTimeline';
+import { LINEUP_Z, montage } from './launchTimeline';
 import { smoothstep } from '../scroll/math';
 
 function chamberGrid() {
@@ -43,7 +43,7 @@ export default function PrelaunchEffects({ progressRef, enabled }: { progressRef
   });
 
   return (
-    <>
+    <group position={[0, 0, LINEUP_Z]}>
       <group ref={chamber} visible={false}>
         <lineSegments geometry={grid}>
           <lineBasicMaterial color="#4c9ca9" opacity={0.28} transparent depthWrite={false} />
@@ -75,7 +75,7 @@ export default function PrelaunchEffects({ progressRef, enabled }: { progressRef
           <meshBasicMaterial color={new THREE.Color(2.2, 2.35, 2.5)} toneMapped={false} side={THREE.DoubleSide} />
         </mesh>
       </group>
-    </>
+    </group>
   );
 }
 

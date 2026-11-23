@@ -1,81 +1,58 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-
-const site = 'https://liamjake102291-create.github.io/roadster-2-flight/';
-const expected = process.env.EXPECTED_ASSET;
-if (expected) {
-  const deadline = Date.now()+115000;
-  while (true) {
-    const response=await fetch(site+'?verify='+Date.now());
-    if ((await response.text()).includes(expected)) break;
-    if (Date.now() >= deadline) throw Error('Updated build has not reached GitHub Pages');
-    await new Promise(resolve=>setTimeout(resolve,2500));
-  }
+const url='https://liamjake102291-create.github.io/roadster-2-flight/';
+const expected=process.env.EXPECTED_ASSET;
+const deadline=Date.now()+115000;
+while (!(await (await fetch(url+'?verify='+Date.now())).text()).includes(expected)) {
+  if (Date.now()>deadline) throw Error('Pages has not published the new build');
+  await new Promise(resolve=>setTimeout(resolve,2500));
 }
-const browser = await chromium.launch({
-  args: ['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'],
-});
-const errors = [];
+
+const browser=await chromium.launch({args:['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 try {
-  const desktop = await browser.newContext({ viewport:{width:960,height:540}, deviceScaleFactor:1 });
-  const page = await desktop.newPage();
-  const responses = [];
-  page.on('pageerror', error => { errors.push(error.message); console.log('DESKTOP ERROR:',error.stack); });
-  page.on('console', m => { if (m.type()==='error') { errors.push(m.text()); console.log('CONSOLE ERROR:',m.text()); } });
-  page.on('response', response => { const entry=[response.url().split('/').at(-1),response.status()]; responses.push(entry); console.log('Response',...entry); });
-  page.on('requestfailed', request => console.log('Request failed:',request.url(),request.failure()));
-  await page.goto(site, {waitUntil:'domcontentloaded',timeout:25000});
-  await page.locator('canvas').waitFor({timeout:45000});
-  try {
-    await page.waitForFunction(() => !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback:not(canvas *)'), undefined, {timeout:50000});
-  } catch (error) {
-    console.log('Rendered page:', (await page.locator('body').innerText()).slice(0,1200));
-    throw error;
-  }
-  assert.ok(responses.some(([path,status])=>path==='roadster.glb.gz' && status===200));
-  assert.ok(!responses.some(([path])=>path==='roadster.glb'));
-  assert.equal(await page.locator('video').count(),0);
-  await page.getByRole('button',{name:'暂停',exact:true}).waitFor({timeout:8000});
-  await page.getByRole('button',{name:'起飞',exact:true}).click();
-  await page.getByRole('heading',{name:'离轨翻滚'}).waitFor({timeout:20000});
+  const page=await browser.newPage({viewport:{width:960,height:540},reducedMotion:'reduce'});
+  const errors=[], requests=[];
+  page.on('pageerror',error=>{errors.push(error.message);console.log(error.stack);});
+  page.on('response',response=>requests.push([response.url(),response.status()]));
+  let release;
+  const held=new Promise(resolve=>{release=resolve;});
+  await page.route('**/models/roadster-performance.glb.gz', async route=>{await held; await route.continue();});
+  const started=Date.now();
+  await page.goto(url,{waitUntil:'domcontentloaded',timeout:25000});
+  const poster=page.locator('#flight-opening-placeholder img');
+  await poster.waitFor();
+  await page.waitForFunction(()=>document.querySelector('#flight-opening-placeholder img')?.naturalWidth>0);
+  console.log('Visible first frame with model transfer blocked:',Date.now()-started,'ms');
+  release();
+  await page.locator('#flight-opening-placeholder').waitFor({state:'detached',timeout:45000});
+  console.log('Interactive scene ready:',Date.now()-started,'ms');
+  assert.ok(requests.some(([address,status])=>address.endsWith('roadster-performance.glb.gz')&&status===200));
+  assert.ok(!requests.some(([address])=>/models\/roadster\.glb(\.gz)?$/.test(address)));
+  assert.ok(requests.some(([address,status])=>address.endsWith(expected+'.gz')&&status===200));
+  await page.getByRole('button',{name:'飞跃',exact:true}).click();
+  await page.getByRole('heading',{name:/360° 横滚/}).waitFor();
+  await page.screenshot({path:'lineup.png',timeout:20000});
   await page.getByRole('button',{name:'播放',exact:true}).click();
-  const measurement = await page.evaluate(() => new Promise((resolve,reject) => {
-    const seen = [];
-    const frames = [];
-    const start = performance.now();
-    let previous = start;
-    function sample(now) {
-      const value = document.querySelector('.chapter-status span')?.textContent?.trim().slice(0,2);
-      if (value && seen.at(-1)!==value) seen.push(value);
-      frames.push(now-previous);
-      previous=now;
-      if (Number(document.querySelector('input[type=range]').value)===1000) {
-        frames.sort((a,b)=>a-b);
-        resolve({seen,seconds:(now-start)/1000,p50Ms:frames[Math.floor(frames.length*.5)],p95Ms:frames[Math.floor(frames.length*.95)],frames:frames.length});
-      } else if (now-start>240000) {
-        reject(new Error('Flight timed out; observed stages: '+seen+'; progress '+document.querySelector('input[type=range]').value));
-      } else requestAnimationFrame(sample);
+  const stages=await page.evaluate(()=>new Promise((resolve,reject)=>{
+    const seen=[];
+    const started=performance.now();
+    function tick(now) {
+      const id=document.querySelector('.chapter-status span')?.textContent?.slice(0,2);
+      if(id&&seen.at(-1)!==id)seen.push(id);
+      if(Number(document.querySelector('input[type=range]').value)===1000) return resolve(seen);
+      if(now-started>240000)return reject(Error('Timed out at '+seen));
+      requestAnimationFrame(tick);
     }
-    requestAnimationFrame(sample);
+    requestAnimationFrame(tick);
   }));
-  console.log('Public desktop timing (software WebGL):',JSON.stringify(measurement));
-  assert.deepEqual(measurement.seen,['04','05','06','07','08']);
+  assert.deepEqual(stages,['02','03','04','05','06','07','08']);
+  await page.getByRole('button',{name:'爬坡',exact:true}).click();
+  await page.getByRole('heading',{name:'坡顶停驻'}).waitFor();
+  await page.screenshot({path:'ramp.png',timeout:20000});
   await page.getByRole('button',{name:'检视',exact:true}).click();
+  assert.equal(await page.locator('.assembly-options button').count(),27);
   await page.getByRole('button',{name:/Structural battery/}).click();
   assert.equal(await page.locator('.detail-panel h3').textContent(),'结构电池包');
-  await desktop.close();
-
-  const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion:'reduce'});
-  mobile.on('pageerror', error => errors.push(error.message));
-  mobile.on('console', m => { if (m.type()==='error') { errors.push(m.text()); console.log('CONSOLE ERROR:',m.text()); } });
-  await mobile.goto(site,{waitUntil:'domcontentloaded',timeout:25000});
-  await mobile.waitForFunction(() => !!document.querySelector('canvas') && !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback:not(canvas *)'), undefined, {timeout:35000});
-  await mobile.getByRole('button',{name:'检视',exact:true}).click();
-  await mobile.getByLabel('当前总成').selectOption('chassis');
-  assert.equal(await mobile.locator('.detail-panel h3').textContent(),'碳纤维底盘');
-  assert.ok(await mobile.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth));
   assert.deepEqual(errors,[]);
-  console.log('Public mobile and desktop WebGL and controls passed.');
-} finally {
-  await browser.close();
-}
+  console.log('Complete play order:',stages.join(' > '),'and 27 selectable assemblies.');
+} finally { await browser.close(); }

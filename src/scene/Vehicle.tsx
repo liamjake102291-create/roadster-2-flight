@@ -8,27 +8,26 @@ import type { ProgressRef } from '../types';
 import { flight, maneuverSeconds, montage, wheelRotation } from './launchTimeline';
 
 const MODEL_URL = import.meta.env.BASE_URL + 'models/roadster.glb';
-const COMPRESSED_DELIVERY = import.meta.env.VITE_PAGES_DELIVERY === 'true' && typeof DecompressionStream !== 'undefined';
+const performanceDelivery = import.meta.env.VITE_PAGES_DELIVERY === 'true';
+const displayModel = import.meta.env.BASE_URL + 'models/roadster-performance.glb';
 
-async function fetchModelUrl() {
-  try {
-    const response = await fetch(MODEL_URL + '.gz');
-    if (!response.ok || !response.body) return MODEL_URL;
-    const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
-    const model = await new Response(stream).blob();
-    return URL.createObjectURL(model);
-  } catch {
-    return MODEL_URL;
-  }
+function modelResource(url: string) {
+  let resolved: string | undefined = performanceDelivery && typeof DecompressionStream !== 'undefined' ? undefined : url;
+  let pending: Promise<void> | undefined;
+  return () => {
+    if (resolved) return resolved;
+    pending ??= fetch(url + '.gz').then(async (response) => {
+      if (!response.ok || !response.body) return url;
+      const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
+      return URL.createObjectURL(await new Response(stream).blob());
+    }).then((compressedUrl) => { resolved = compressedUrl; }, () => { resolved = url; });
+    throw pending;
+  };
 }
 
-let resolvedUrl: string | undefined = COMPRESSED_DELIVERY ? undefined : MODEL_URL;
-const pendingUrl = COMPRESSED_DELIVERY ? fetchModelUrl().then((url) => { resolvedUrl = url; }) : null;
+const getOriginalModelUrl = modelResource(MODEL_URL);
+const getDisplayModelUrl = performanceDelivery ? modelResource(displayModel) : getOriginalModelUrl;
 
-function getModelUrl() {
-  if (!resolvedUrl) throw pendingUrl;
-  return resolvedUrl;
-}
 const highlight = new THREE.Color('#82b9e8');
 const scanBlue = new THREE.Color('#379bff');
 const internals = new Set(['chassis', 'battery', 'drive-front', 'drive-rear', 'fan-front', 'fan-rear', 'tanks', 'cockpit']);
@@ -41,10 +40,11 @@ interface VehicleProps {
   xray?: boolean;
   cinematic?: boolean;
   software?: boolean;
+  fullDetail?: boolean;
 }
 
-export default function Vehicle({ progressRef, selectedId, onSelect, xray = false, cinematic = false, software = false }: VehicleProps) {
-  const { scene } = useGLTF(getModelUrl());
+export default function Vehicle({ progressRef, selectedId, onSelect, xray = false, cinematic = false, software = false, fullDetail = false }: VehicleProps) {
+  const { scene } = useGLTF(fullDetail ? getOriginalModelUrl() : getDisplayModelUrl());
   const parts = useMemo(() => {
     const model = scene.getObjectByName('Roadster_2_Concept') ?? scene;
     return model.children.map((source) => {
@@ -174,4 +174,4 @@ export default function Vehicle({ progressRef, selectedId, onSelect, xray = fals
   );
 }
 
-if (!COMPRESSED_DELIVERY) useGLTF.preload(MODEL_URL);
+if (!performanceDelivery) useGLTF.preload(MODEL_URL);

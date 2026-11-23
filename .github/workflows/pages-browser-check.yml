@@ -17,7 +17,7 @@ jobs:
       - run: npx playwright install chromium --only-shell
       - run: node tests/pages-live.mjs
         env:
-          EXPECTED_ASSET: roadster-6bfc51842e.js
+          EXPECTED_ASSET: roadster-709551e741.js
 
 
 
