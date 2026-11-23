@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { chapterWindow, smoothstep } from '../scroll/math';
-import { flight, flightPose, maneuverSeconds, montage } from './launchTimeline';
+import { flight, flightPose, lineup, maneuverSeconds, montage } from './launchTimeline';
 
 const under = [-0.78, 0.78].flatMap((x) => [-1.4, 1.4].map((z) => ({
   at: new THREE.Vector3(x, 0.041, z), axis: new THREE.Vector3(0, -1, 0), group: 'floor' as const,
@@ -15,6 +15,15 @@ const outlets = [...under, ...rear, ...nose];
 
 export function nozzlePower(t: number, index: number) {
   const { at, group } = outlets[index];
+  if (t >= lineup.start && t < 0) {
+    if (group === 'rear') return 0.37 * chapterWindow(t, lineup.lift, -6.56, -6.15, -5.65);
+    if (group === 'nose') return 0.25 * chapterWindow(t, -1.10, -0.81, -0.69, -0.40);
+    const lift = 0.87 * chapterWindow(t, lineup.spool, -6.69, -6.19, -5.76);
+    const rotate = (at.x < 0 ? 0.61 : 0.08) * chapterWindow(t, -6.04, -5.77, -5.40, -5.07);
+    const straighten = (at.x > 0 ? 0.50 : 0.05) * chapterWindow(t, -3.94, -3.66, -3.40, -3.18);
+    const settle = 0.68 * chapterWindow(t, -3.45, -2.98, -1.27, -0.74);
+    return Math.max(lift, rotate, straighten, settle);
+  }
   if (t < 0) {
     const start = maneuverSeconds(montage.flow);
     const end = maneuverSeconds(montage.scan);
@@ -95,15 +104,15 @@ export function buildWake(subdivisions: number) {
       rotation.set(pose.pitch, pose.yaw, pose.roll, 'XYZ');
       const origin = outlet.at.clone().applyEuler(rotation).add(new THREE.Vector3(pose.x, pose.y, pose.z));
       const axis = outlet.axis.clone().applyEuler(rotation);
-      const speed = (t < 0 ? 2.0 : outlet.group === 'floor' ? 9.0 : 10.5) * (0.62 + 0.54 * power);
+      const speed = (t < lineup.start ? 2.0 : outlet.group === 'floor' ? 9.0 : 10.5) * (0.62 + 0.54 * power);
       const jitter = 0.65 + 0.46 * power;
       const velocity = axis.multiplyScalar(speed * (0.73 + seed(n + 9) * 0.48)).add(new THREE.Vector3(
         (pose.x - previous.x) * 32 + (seed(n + 11) - 0.5) * jitter,
         (pose.y - previous.y) * 23 + (seed(n + 13) - 0.5) * jitter,
         (pose.z - previous.z) * 33 + (seed(n + 17) - 0.5) * jitter,
       ));
-      const lifetime = t < 0 ? 0.55 : 1.25 + seed(n + 7) * 0.77;
-      const impact = t < 0 ? Infinity : collision(origin, velocity, lifetime);
+      const lifetime = t < lineup.start ? 0.55 : 1.25 + seed(n + 7) * 0.77;
+      const impact = t < lineup.start ? Infinity : collision(origin, velocity, lifetime);
       puffs.push({ born: t, lifetime, power, origin, velocity, impact,
         direction: seed(n) * Math.PI * 2, spin: (seed(n + 5) - 0.5) * 2.4, width: 0.69 + seed(n + 2) * 0.61 });
     }

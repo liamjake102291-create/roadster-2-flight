@@ -350,3 +350,7 @@ button:focus-visible { outline: 1px solid #ef2330; outline-offset: 5px; }
   color: #dde6ed; background: var(--panel); font-size: 13px; pointer-events: none;
 }
 .canvas-shell:has(.scene-fallback:not(canvas *)) .scene-loading { display: none; }
+
+body:has(#flight-opening-placeholder) .scene-loading { display: none; }
+body:has(.canvas-shell .scene-fallback:not(canvas *)) #flight-opening-placeholder { display: none; }
+body:has(.lab-root) #flight-opening-placeholder { display: none; }

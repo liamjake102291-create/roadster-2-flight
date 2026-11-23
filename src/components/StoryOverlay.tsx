@@ -1,6 +1,6 @@
 import type { ViewMode } from '../types';
 import { inspectionVisible } from '../scroll/math';
-import { flight, HANDOFF, LANDING, maneuverSeconds, montage } from '../scene/launchTimeline';
+import { flight, HANDOFF, LANDING, lineup, maneuverSeconds, montage } from '../scene/launchTimeline';
 
 interface Props {
   progress: number;
@@ -14,7 +14,7 @@ interface Props {
 
 const chapters = [
   { id: '01', at: 0, jump: 0, label: '开场', english: 'FLIGHT PROLOGUE', title: 'ROADSTER', copy: '' },
-  { id: '02', at: montage.overhead, jump: 0.232, label: '上电', english: 'SYSTEMS ONLINE', title: '坡脚待发', copy: '灯组点亮，车辆驶入发射跑道。' },
+  { id: '02', at: montage.overhead, jump: 0.232, label: '飞跃', english: 'LINEUP JUMP', title: '飞跃车列', copy: '越过五台车，完成一周横滚后落地。' },
   { id: '03', at: montage.approach, jump: 0.322, label: '爬坡', english: 'RAMP ASCENT', title: '坡道加速', copy: '沿弧面爬升并在过悬坡顶停稳。' },
   { id: '04', at: montage.fly, jump: 0.369, label: '起飞', english: 'POWERED FLIGHT', title: '脱轨起飞', copy: '越过坡顶，冷气喷流介入并稳住车身。' },
   { id: '05', at: 0.45, jump: 0.52, label: '拆解', english: 'EXPLODED VIEW', title: '分层拆解', copy: '覆盖件、座舱、底盘和推进系统依次分离。' },
@@ -45,7 +45,11 @@ export default function StoryOverlay({ progress, playing, mode, onMode, onSeek, 
   const hover = progress >= HANDOFF && progress < 0.45;
   const seconds = maneuverSeconds(progress);
   const staged = (progress >= montage.lineup && progress <= HANDOFF + 0.002) || progress >= LANDING;
-  const stage = seconds < flight.move ? '跑道待发'
+  const stage = seconds < lineup.lift ? '车列起跳准备'
+    : seconds < lineup.upright ? '飞跃车列 · 360° 横滚'
+    : seconds < lineup.touch ? '车列末端缓降'
+    : seconds < lineup.end ? '越过车列 · 接地'
+    : seconds < flight.move ? '跑道待发'
     : seconds < flight.ramp ? '跑道加速'
     : seconds < flight.hang ? '沿坡爬升'
     : seconds < flight.boost ? '坡顶停驻'

@@ -21,7 +21,7 @@ export default function LaunchStage({ progressRef, cinematic }: Pick<NarrativePr
   return (
     <group ref={stage}>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.017, 0]} receiveShadow>
-        <planeGeometry args={[70, 70]} />
+        <planeGeometry args={[100, 110]} />
         <meshStandardMaterial color="#161a20" metalness={0.60} roughness={0.49} />
       </mesh>
       <group ref={pad}>

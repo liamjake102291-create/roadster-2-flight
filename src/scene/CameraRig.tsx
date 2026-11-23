@@ -5,7 +5,7 @@ import type { OrbitControls as Orbit } from 'three-stdlib';
 import * as THREE from 'three';
 import { clamp01, lerp, smoothstep } from '../scroll/math';
 import type { NarrativeProps, Vec3, ViewMode } from '../types';
-import { flight, HANDOFF, LANDING, launchPose, maneuverSeconds, montage } from './launchTimeline';
+import { flight, HANDOFF, LANDING, LINEUP_Z, lineup, launchPose, maneuverSeconds, montage } from './launchTimeline';
 
 type Shot = { at: number; eye: Vec3; look: Vec3; fov: number; move?: Vec3; follow?: boolean; fit?: number };
 const reel: Shot[] = [
@@ -16,10 +16,9 @@ const reel: Shot[] = [
   { at: montage.silhouette, eye: [0.23, 1.14, -5.5], look: [0, 0.64, -0.32], fov: 35, move: [0.36, -0.36, 0.46], fit: 0.48 },
   { at: montage.lightbar, eye: [0.07, 0.57, -4.55], look: [0, 0.49, -2.29], fov: 44, move: [0.15, 0.09, -0.42], fit: 0.50 },
   { at: montage.overhead, eye: [3.5, 10.6, 5.2], look: [0, 0.17, -1.25], fov: 40, move: [-0.9, -1.6, -1.45], fit: 0.8 },
-  { at: montage.lineup, eye: [-9.6, 2.0, 2.9], look: [0, 0.44, -0.1], fov: 38, follow: true, move: [0.28, -0.1, -0.2], fit: 0.84 },
-  { at: montage.approach, eye: [-15.1, 3.7, -1.4], look: [0, 0.64, -2.0], fov: 43, follow: true, move: [0.8, 0.45, 0.1], fit: 0.77 },
-  { at: montage.track, eye: [-20.2, 7.5, -2.0], look: [0, 5.8, -9.3], fov: 42, move: [0.9, 1.9, -3.3], fit: 0.77 },
-  { at: montage.crest, eye: [-11.8, 2.02, 1.15], look: [0, -0.30, -0.72], fov: 33, follow: true, move: [0.7, -0.25, 0.25], fit: 0.77 },
+    { at: montage.approach, eye: [18.3, 4.25, 1.15], look: [0, 1.30, -7.4], fov: 43, follow: true, move: [0.8, 0.45, 0.1], fit: 0.77 },
+  { at: montage.track, eye: [21.8, 8.3, -2.0], look: [0, 5.7, -8.4], fov: 42, move: [0.9, 1.9, -3.3], fit: 0.77 },
+  { at: montage.crest, eye: [13.8, 2.25, 2.55], look: [0, -0.35, 1.45], fov: 33, follow: true, move: [0.7, -0.25, 0.25], fit: 0.77 },
 ];
 
 const inspectionShots = [
@@ -63,14 +62,24 @@ export default function CameraRig({ progressRef, reducedMotion, mobile, mode }: 
     let shotKey = -1;
 
     const flightShot = (p >= montage.fly && p <= HANDOFF + 0.002) || p >= LANDING;
-    if (flightShot && mode === 'surface') {
+    if (p >= montage.lineup && p < montage.approach && mode === 'surface') {
+      const time = maneuverSeconds(p);
+      const opening = smoothstep(lineup.start, lineup.lift, time);
+      const ending = smoothstep(lineup.upright, lineup.end, time);
+      const zoom = Math.max(1, 0.78 / aspect);
+      const focusZ = lerp(lerp(29.1, 22.3, opening), 4.1, ending);
+      desired.current.set(lerp(27.4, 21.4, ending) * zoom, lerp(7.8, 4.9, ending) * zoom, focusZ + 4.8);
+      center.current.set(0, lerp(2.12, 1.15, ending), focusZ);
+      fov = 43 + (mobile ? 5 : 0);
+      shotKey = -4;
+    } else if (flightShot && mode === 'surface') {
       const seconds = maneuverSeconds(p);
       const touchdown = smoothstep(flight.hover, flight.touch, seconds);
       const rollout = smoothstep(flight.touch, flight.end, seconds);
       const hover = smoothstep(14.05, flight.hover, seconds);
       const distance = lerp(14.0, 11.7, hover) * Math.max(1, 0.82 / aspect);
-      desired.current.set(-distance, pose.y + lerp(3.4, 1.15, hover) + touchdown * 0.14, pose.z + lerp(2.3, 0.4, hover) + rollout * 1.3);
-      center.current.set(pose.x, pose.y - lerp(0.22, 0.60, hover) + touchdown * 0.74, pose.z - lerp(0.86, 0.22, hover));
+      desired.current.set(p >= LANDING ? -distance : distance, pose.y + lerp(3.4, 1.15, hover) + touchdown * 0.14, pose.z + lerp(2.3, 0.4, hover) + rollout * 1.3);
+      center.current.set(pose.x, pose.y - lerp(0.22, 0.60, hover) + touchdown * 0.74, pose.z - (p >= LANDING ? 0.22 : 1.30));
       fov = 42 + (mobile ? 5 : 0);
       shotKey = -3;
     } else if (cinematic) {
@@ -85,6 +94,10 @@ export default function CameraRig({ progressRef, reducedMotion, mobile, mode }: 
       if (shot.move) desired.current.set(
         shot.eye[0] + shot.move[0] * motion, shot.eye[1] + shot.move[1] * motion, shot.eye[2] + shot.move[2] * motion,
       );
+      if (p < montage.lineup) {
+        desired.current.z += LINEUP_Z;
+        center.current.z += LINEUP_Z;
+      }
       if (shot.follow) {
         desired.current.x += pose.x; desired.current.y += pose.y; desired.current.z += pose.z;
         center.current.x += pose.x; center.current.y += pose.y; center.current.z += pose.z;
@@ -106,14 +119,16 @@ export default function CameraRig({ progressRef, reducedMotion, mobile, mode }: 
       const t = smoothstep(previous.p, next.p, p);
       const exploded = smoothstep(0.47, 0.66, p) * (1 - smoothstep(0.74, 0.87, p));
       const distance = lerp(previous.distance, next.distance, t) * (mobile ? Math.max(1.12, (0.97 + exploded * 0.12) / aspect) : Math.max(1, 1.37 / aspect));
-      const angle = -lerp(previous.angle, next.angle, t);
+      const angle = lerp(previous.angle, next.angle, t);
       const horizontal = !mobile && mode !== 'xray' ? -1.2 * smoothstep(0.95, 1, p) : 0;
       desired.current.set(Math.sin(angle) * distance, lerp(previous.height, next.height, t) + (mobile ? 0.6 : 0), Math.cos(angle) * distance);
       center.current.set(Math.cos(angle) * horizontal, lerp(previous.look, next.look, t) - (mobile ? 0.18 : 0), -Math.sin(angle) * horizontal);
       fov = lerp(previous.fov, next.fov, t) + (mobile ? 3 : 0);
     }
 
-    const cut = cinematic && p < montage.lineup && previousPose.current !== shotKey;
+    const cut = previousPose.current !== shotKey && (
+      (cinematic && (p < montage.lineup || shotKey === -4)) || (p >= LANDING && flightShot && mode === 'surface')
+    );
     const damping = !initialized.current || cut || reducedMotion ? 1 : 1 - Math.exp(-Math.min(delta, 0.05) * 9);
     initialized.current = true;
     previousPose.current = shotKey;

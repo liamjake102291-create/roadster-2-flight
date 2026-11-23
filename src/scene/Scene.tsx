@@ -9,8 +9,9 @@ import GroundShadow from './Effects';
 import JetPlumes from './JetPlumes';
 import LaunchStage from './LaunchStage';
 import LaunchRamp from './LaunchRamp';
+import Lineup from './Lineup';
 import PrelaunchEffects, { setLaunchLights } from './PrelaunchEffects';
-import { montage } from './launchTimeline';
+import { LINEUP_Z, montage } from './launchTimeline';
 import type { NarrativeProps, ViewMode } from '../types';
 
 interface SceneProps extends NarrativeProps {
@@ -47,7 +48,10 @@ export default function Scene(props: SceneProps) {
   const edge = useRef<SpotLight>(null);
   const cabin = useRef<PointLight>(null);
   const cinematic = props.mode === 'surface';
-  useEffect(() => { onReady(); }, [onReady]);
+  useEffect(() => {
+    document.getElementById('flight-opening-placeholder')?.remove();
+    onReady();
+  }, [onReady]);
   useFrame(({ scene }) => {
     const p = props.progressRef.current;
     if (key.current && fill.current && rampKey.current) {
@@ -63,13 +67,13 @@ export default function Scene(props: SceneProps) {
     <>
       <RenderResolution mobile={props.mobile} software={software} />
       <color attach="background" args={['#080a0e']} />
-      <fog attach="fog" args={['#080a0e', 19, 56]} />
+      <fog attach="fog" args={['#080a0e', 24, 75]} />
       <hemisphereLight ref={fill} color="#dde8f1" groundColor="#4c4e59" intensity={0.63} />
       <directionalLight ref={key} position={[3, 6, -3]} color="#fff5e7" intensity={1.48} />
       <spotLight ref={back} position={[-4.5, 3, 4]} color="#b9d5f1" intensity={47} angle={0.56} penumbra={0.78} distance={16} />
       <spotLight ref={edge} position={[4, 4.1, 2]} color="#ededff" intensity={30} angle={0.51} penumbra={0.93} distance={16} />
       <pointLight ref={rampKey} position={[0, 8, -5.5]} color="#c3d9ee" intensity={0} distance={32} decay={2} />
-      <pointLight ref={cabin} position={[0, 0.8, 0.37]} color="#c3d4f2" intensity={0} distance={2.1} />
+      <pointLight ref={cabin} position={[0, 0.8, LINEUP_Z + 0.37]} color="#c3d4f2" intensity={0} distance={2.1} />
       <Environment resolution={128}>
         <Lightformer intensity={3.1} color="#f9f3ff" scale={[7, 2.1, 1]} position={[0, 4, -1]} rotation={[Math.PI / 2, 0, 0]} />
         <Lightformer intensity={2.5} color="#bad8ff" scale={[7, 1.15, 1]} position={[4.5, 1.7, 0]} rotation={[0, -Math.PI / 2, Math.PI / 2]} />
@@ -78,6 +82,7 @@ export default function Scene(props: SceneProps) {
       </Environment>
       <LaunchStage progressRef={props.progressRef} cinematic={cinematic} />
       <LaunchRamp progressRef={props.progressRef} cinematic={cinematic} />
+      <Lineup progressRef={props.progressRef} />
       <GroundShadow progressRef={props.progressRef} mobile={props.mobile} />
       <JetPlumes progressRef={props.progressRef} reducedMotion={props.reducedMotion} mobile={props.mobile} />
       <PrelaunchEffects progressRef={props.progressRef} enabled={cinematic} />

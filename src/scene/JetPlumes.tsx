@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { smoothstep } from '../scroll/math';
 import type { NarrativeProps } from '../types';
 import { buildWake, movePuff } from './exhaustWake';
-import { flight, HANDOFF, LANDING, maneuverSeconds, playbackSeconds } from './launchTimeline';
+import { flight, HANDOFF, LANDING, lineup, maneuverSeconds, playbackSeconds } from './launchTimeline';
 
 const vertexShader = `
   attribute vec3 puffCenter;
@@ -94,7 +94,7 @@ export default function JetPlumes({ progressRef, mobile, reducedMotion }: Narrat
         if (age >= puff.lifetime) continue;
         const rebound = movePuff(puff, age, position);
         const size = (0.13 + 0.89 * age ** 0.72) * puff.width * (0.72 + puff.power * 0.32);
-        const opacity = (puff.born < 0 ? 0.85 : mobile ? 0.59 : 0.52) * fade *
+        const opacity = (puff.born < lineup.start ? 0.85 : mobile ? 0.59 : 0.52) * fade *
           (0.35 + puff.power * 0.66) * (1 - smoothstep(0.41 * puff.lifetime, puff.lifetime, age));
         centers.setXYZ(slot, position.x, position.y, position.z);
         shapes.setXYZW(slot, size * (1 + 0.72 * smoothstep(0, 0.43, rebound)),
