@@ -10,12 +10,18 @@ try {
   const desktop = await browser.newContext({ viewport:{width:1280,height:720}, deviceScaleFactor:1 });
   const page = await desktop.newPage();
   const responses = [];
-  page.on('pageerror', error => errors.push(error.message));
-  page.on('console', m => { if (m.type()==='error') errors.push(m.text()); });
-  page.on('response', response => responses.push([response.url().split('/').at(-1),response.status()]));
+  page.on('pageerror', error => { errors.push(error.message); console.log('DESKTOP ERROR:',error.stack); });
+  page.on('console', m => { if (m.type()==='error') { errors.push(m.text()); console.log('CONSOLE ERROR:',m.text()); } });
+  page.on('response', response => { const entry=[response.url().split('/').at(-1),response.status()]; responses.push(entry); console.log('Response',...entry); });
+  page.on('requestfailed', request => console.log('Request failed:',request.url(),request.failure()));
   await page.goto(site, {waitUntil:'domcontentloaded',timeout:25000});
   await page.locator('canvas').waitFor({timeout:45000});
-  await page.waitForFunction(() => !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), {timeout:45000});
+  try {
+    await page.waitForFunction(() => !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), undefined, {timeout:26000});
+  } catch (error) {
+    console.log('Rendered page:', (await page.locator('body').innerText()).slice(0,1200));
+    throw error;
+  }
   assert.ok(responses.some(([path,status])=>path==='roadster.glb.gz' && status===200));
   assert.ok(!responses.some(([path])=>path==='roadster.glb'));
   assert.equal(await page.locator('video').count(),0);
@@ -50,9 +56,9 @@ try {
 
   const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion:'reduce'});
   mobile.on('pageerror', error => errors.push(error.message));
-  mobile.on('console', m => { if (m.type()==='error') errors.push(m.text()); });
+  mobile.on('console', m => { if (m.type()==='error') { errors.push(m.text()); console.log('CONSOLE ERROR:',m.text()); } });
   await mobile.goto(site,{waitUntil:'domcontentloaded',timeout:25000});
-  await mobile.waitForFunction(() => !!document.querySelector('canvas') && !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), {timeout:45000});
+  await mobile.waitForFunction(() => !!document.querySelector('canvas') && !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), undefined, {timeout:35000});
   await mobile.getByRole('button',{name:'检视',exact:true}).click();
   await mobile.getByLabel('当前总成').selectOption('chassis');
   assert.equal(await mobile.locator('.detail-panel h3').textContent(),'碳纤维底盘');
