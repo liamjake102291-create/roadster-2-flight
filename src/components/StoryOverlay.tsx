@@ -86,7 +86,7 @@ export default function StoryOverlay({ progress, playing, mode, onMode, onSeek, 
           </>
         ) : (
           <>
-            <p className="flight-eyebrow">{complete ? 'FLIGHT COMPLETE' : hover ? 'HOLD FOR INSPECTION' : staged ? Math.max(0,seconds).toFixed(1) + ' s' : chapter.english}</p>
+            <p className="flight-eyebrow">{complete ? 'FLIGHT COMPLETE' : hover ? 'HOLD FOR INSPECTION' : staged ? Math.max(0,chapter.id === '02' ? seconds - lineup.start : seconds).toFixed(1) + ' s' : chapter.english}</p>
             <h2>{complete ? '演示结束' : hover ? '悬停就位' : staged ? stage : chapter.title}</h2>
             {(!staged || hover || complete) && <p className="flight-description">{complete ? '车辆已接地。' : hover ? '车辆稳定悬停，准备展开 27 组总成。' : chapter.copy}</p>}
           </>
@@ -123,4 +123,5 @@ export default function StoryOverlay({ progress, playing, mode, onMode, onSeek, 
     </div>
   );
 }
+
 
