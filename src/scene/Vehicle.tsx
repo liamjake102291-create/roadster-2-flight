@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { Suspense, useEffect, useMemo } from 'react';
 import { Html, useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -9,24 +9,30 @@ import { flight, maneuverSeconds, montage, wheelRotation } from './launchTimelin
 
 const MODEL_URL = import.meta.env.BASE_URL + 'models/roadster.glb';
 const performanceDelivery = import.meta.env.VITE_PAGES_DELIVERY === 'true';
-const displayModel = import.meta.env.BASE_URL + 'models/roadster-performance.glb';
+const modelBase = import.meta.env.BASE_URL + 'models/';
+const pageAssets = (window as Window & { roadsterAssets?: {
+  model: (filename: string) => Promise<Blob>;
+} }).roadsterAssets;
+const splitDelivery = performanceDelivery && Boolean(pageAssets);
 
-function modelResource(url: string) {
-  let resolved: string | undefined = performanceDelivery && typeof DecompressionStream !== 'undefined' ? undefined : url;
+function modelResource(url: string, load?: () => Promise<Blob>) {
+  let resolved: string | undefined = load || (performanceDelivery && typeof DecompressionStream !== 'undefined') ? undefined : url;
   let pending: Promise<void> | undefined;
   return () => {
     if (resolved) return resolved;
-    pending ??= fetch(url + '.gz').then(async (response) => {
+    pending ??= (load ? load().then((blob) => URL.createObjectURL(blob)) : fetch(url + '.gz').then(async (response) => {
       if (!response.ok || !response.body) return url;
       const stream = response.body.pipeThrough(new DecompressionStream('gzip'));
       return URL.createObjectURL(await new Response(stream).blob());
-    }).then((compressedUrl) => { resolved = compressedUrl; }, () => { resolved = url; });
+    })).then((compressedUrl) => { resolved = compressedUrl; }, () => { resolved = url; });
     throw pending;
   };
 }
 
 const getOriginalModelUrl = modelResource(MODEL_URL);
-const getDisplayModelUrl = performanceDelivery ? modelResource(displayModel) : getOriginalModelUrl;
+const getDisplayModelUrl = performanceDelivery ? modelResource(modelBase + 'roadster-performance.glb') : getOriginalModelUrl;
+const getOpeningModelUrl = modelResource(modelBase + 'roadster-opening.glb', pageAssets && (() => pageAssets.model('roadster-opening.glb')));
+const getInteriorModelUrl = modelResource(modelBase + 'roadster-interior.glb', pageAssets && (() => pageAssets.model('roadster-interior.glb')));
 
 const highlight = new THREE.Color('#82b9e8');
 const scanBlue = new THREE.Color('#379bff');
@@ -41,10 +47,13 @@ interface VehicleProps {
   cinematic?: boolean;
   software?: boolean;
   fullDetail?: boolean;
+  onInteriorReady?: () => void;
 }
 
-export default function Vehicle({ progressRef, selectedId, onSelect, xray = false, cinematic = false, software = false, fullDetail = false }: VehicleProps) {
-  const { scene } = useGLTF(fullDetail ? getOriginalModelUrl() : getDisplayModelUrl());
+function Assemblies({ progressRef, selectedId, onSelect, xray = false, cinematic = false, software = false,
+  model, onReady }: VehicleProps & { model: () => string; onReady?: () => void }) {
+  const { scene } = useGLTF(model());
+  useEffect(() => { onReady?.(); }, [onReady]);
   const parts = useMemo(() => {
     const model = scene.getObjectByName('Roadster_2_Concept') ?? scene;
     return model.children.map((source) => {
@@ -171,6 +180,20 @@ export default function Vehicle({ progressRef, selectedId, onSelect, xray = fals
         </primitive>
       ))}
     </group>
+  );
+}
+
+export default function Vehicle({ fullDetail, onInteriorReady, ...props }: VehicleProps) {
+  if (fullDetail || !splitDelivery) {
+    return <Assemblies {...props} model={fullDetail ? getOriginalModelUrl : getDisplayModelUrl} onReady={onInteriorReady} />;
+  }
+  return (
+    <>
+      <Assemblies {...props} model={getOpeningModelUrl} />
+      <Suspense fallback={null}>
+        <Assemblies {...props} model={getInteriorModelUrl} onReady={onInteriorReady} />
+      </Suspense>
+    </>
   );
 }
 

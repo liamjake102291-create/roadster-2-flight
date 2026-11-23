@@ -18,6 +18,7 @@ interface SceneProps extends NarrativeProps {
   selectedId: string;
   onSelect: (id: string) => void;
   onReady: () => void;
+  onInteriorReady: () => void;
   mobile: boolean;
   mode: ViewMode;
 }

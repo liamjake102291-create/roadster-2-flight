@@ -8,12 +8,13 @@ import { launchPose } from './launchTimeline';
 interface CarRigProps extends NarrativeProps {
   selectedId: string;
   onSelect: (id: string) => void;
+  onInteriorReady: () => void;
   mobile: boolean;
   software: boolean;
   mode: ViewMode;
 }
 
-export default function CarRig({ progressRef, selectedId, onSelect, mode, software }: CarRigProps) {
+export default function CarRig({ progressRef, selectedId, onSelect, onInteriorReady, mode, software }: CarRigProps) {
   const root = useRef<THREE.Group>(null);
   useFrame(() => {
     if (!root.current) return;
@@ -25,7 +26,7 @@ export default function CarRig({ progressRef, selectedId, onSelect, mode, softwa
 
   return (
     <group ref={root}>
-      <Vehicle progressRef={progressRef} selectedId={selectedId} onSelect={onSelect}
+      <Vehicle progressRef={progressRef} selectedId={selectedId} onSelect={onSelect} onInteriorReady={onInteriorReady}
         software={software} xray={mode === 'xray'} cinematic={mode === 'surface'} />
     </group>
   );
