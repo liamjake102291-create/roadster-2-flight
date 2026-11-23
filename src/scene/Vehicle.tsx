@@ -31,6 +31,7 @@ function getModelUrl() {
 }
 const highlight = new THREE.Color('#82b9e8');
 const scanBlue = new THREE.Color('#379bff');
+const internals = new Set(['chassis', 'battery', 'drive-front', 'drive-rear', 'fan-front', 'fan-rear', 'tanks', 'cockpit']);
 const covers = new Set(['body', 'canopy', 'nacelle', 'fascia-front', 'fascia-rear']);
 
 interface VehicleProps {
@@ -110,7 +111,7 @@ export default function Vehicle({ progressRef, selectedId, onSelect, xray = fals
       }
       const blend = smoothstep(part.delay, 1, amount);
       const [x, y, z] = part.offset;
-      object.visible = !cabin || part.id === 'cockpit';
+      object.visible = cabin ? part.id === 'cockpit' : xray || scan || amount > 0 || !internals.has(part.id);
       object.position.set(rest.x + x * blend, rest.y + y * blend, rest.z + z * blend);
       const corner = /^(wheel|brake)-f/.test(part.id);
       const spin = part.id.startsWith('wheel-') ? wheelSpin : 0;

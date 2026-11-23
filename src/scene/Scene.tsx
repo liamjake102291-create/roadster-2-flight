@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Environment, Lightformer } from '@react-three/drei';
 import { useFrame, useThree } from '@react-three/fiber';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
@@ -21,19 +21,25 @@ interface SceneProps extends NarrativeProps {
   mode: ViewMode;
 }
 
-function RenderResolution({ mobile }: { mobile: boolean }) {
+function RenderResolution({ mobile, software }: { mobile: boolean; software: boolean }) {
   const { width, height } = useThree((state) => state.size);
   const setDpr = useThree((state) => state.setDpr);
   useEffect(() => {
-    const budget = mobile ? 950_000 : 2_500_000;
+    const budget = software ? 180_000 : mobile ? 950_000 : 2_500_000;
     const cap = mobile ? 1 : 1.25;
-    setDpr(Math.max(0.65, Math.min(window.devicePixelRatio || 1, cap, Math.sqrt(budget / Math.max(1, width * height)))));
-  }, [width, height, mobile, setDpr]);
+    setDpr(Math.max(software ? 0.33 : 0.65, Math.min(window.devicePixelRatio || 1, cap, Math.sqrt(budget / Math.max(1, width * height)))));
+  }, [width, height, mobile, software, setDpr]);
   return null;
 }
 
 export default function Scene(props: SceneProps) {
   const { onReady } = props;
+  const gl = useThree((state) => state.gl);
+  const software = useMemo(() => {
+    const context = gl.getContext();
+    const info = context.getExtension('WEBGL_debug_renderer_info');
+    return info !== null && /swiftshader|llvmpipe|software/i.test(String(context.getParameter(info.UNMASKED_RENDERER_WEBGL)));
+  }, [gl]);
   const key = useRef<DirectionalLight>(null);
   const fill = useRef<HemisphereLight>(null);
   const rampKey = useRef<PointLight>(null);
@@ -55,7 +61,7 @@ export default function Scene(props: SceneProps) {
 
   return (
     <>
-      <RenderResolution mobile={props.mobile} />
+      <RenderResolution mobile={props.mobile} software={software} />
       <color attach="background" args={['#080a0e']} />
       <fog attach="fog" args={['#080a0e', 19, 56]} />
       <hemisphereLight ref={fill} color="#dde8f1" groundColor="#4c4e59" intensity={0.63} />
@@ -77,7 +83,7 @@ export default function Scene(props: SceneProps) {
       <PrelaunchEffects progressRef={props.progressRef} enabled={cinematic} />
       <CarRig {...props} />
       <CameraRig {...props} />
-      {!props.mobile && <EffectComposer multisampling={0}>
+      {!props.mobile && !software && <EffectComposer multisampling={0}>
         <Bloom intensity={0.34} luminanceThreshold={1.05} luminanceSmoothing={0.60} mipmapBlur levels={4} />
       </EffectComposer>}
     </>

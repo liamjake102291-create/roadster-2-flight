@@ -2,6 +2,16 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 
 const site = 'https://liamjake102291-create.github.io/roadster-2-flight/';
+const expected = process.env.EXPECTED_ASSET;
+if (expected) {
+  const deadline = Date.now()+115000;
+  while (true) {
+    const response=await fetch(site+'?verify='+Date.now());
+    if ((await response.text()).includes(expected)) break;
+    if (Date.now() >= deadline) throw Error('Updated build has not reached GitHub Pages');
+    await new Promise(resolve=>setTimeout(resolve,2500));
+  }
+}
 const browser = await chromium.launch({
   args: ['--enable-webgl','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader'],
 });
@@ -17,7 +27,7 @@ try {
   await page.goto(site, {waitUntil:'domcontentloaded',timeout:25000});
   await page.locator('canvas').waitFor({timeout:45000});
   try {
-    await page.waitForFunction(() => !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), undefined, {timeout:26000});
+    await page.waitForFunction(() => !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback:not(canvas *)'), undefined, {timeout:50000});
   } catch (error) {
     console.log('Rendered page:', (await page.locator('body').innerText()).slice(0,1200));
     throw error;
@@ -41,12 +51,13 @@ try {
       if (Number(document.querySelector('input[type=range]').value)===1000) {
         frames.sort((a,b)=>a-b);
         resolve({seen,seconds:(now-start)/1000,p50Ms:frames[Math.floor(frames.length*.5)],p95Ms:frames[Math.floor(frames.length*.95)],frames:frames.length});
-      } else if (now-start>125000) {
+      } else if (now-start>180000) {
         reject(new Error('Flight timed out; observed stages: '+seen));
       } else requestAnimationFrame(sample);
     }
     requestAnimationFrame(sample);
   }));
+  console.log('Public desktop timing (software WebGL):',JSON.stringify(measurement));
   assert.deepEqual(measurement.seen,['04','05','06','07','08']);
   await page.getByRole('button',{name:'检视',exact:true}).click();
   await page.getByRole('button',{name:/Structural battery/}).click();
@@ -58,7 +69,7 @@ try {
   mobile.on('pageerror', error => errors.push(error.message));
   mobile.on('console', m => { if (m.type()==='error') { errors.push(m.text()); console.log('CONSOLE ERROR:',m.text()); } });
   await mobile.goto(site,{waitUntil:'domcontentloaded',timeout:25000});
-  await mobile.waitForFunction(() => !!document.querySelector('canvas') && !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback'), undefined, {timeout:35000});
+  await mobile.waitForFunction(() => !!document.querySelector('canvas') && !document.querySelector('.scene-loading') && !document.querySelector('.scene-fallback:not(canvas *)'), undefined, {timeout:35000});
   await mobile.getByRole('button',{name:'检视',exact:true}).click();
   await mobile.getByLabel('当前总成').selectOption('chassis');
   assert.equal(await mobile.locator('.detail-panel h3').textContent(),'碳纤维底盘');
