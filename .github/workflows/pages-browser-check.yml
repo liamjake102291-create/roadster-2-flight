@@ -17,7 +17,7 @@ jobs:
       - run: npx playwright install chromium --only-shell
       - run: node tests/pages-live.mjs
         env:
-          EXPECTED_ASSET: roadster-2702eb7c44.js
+          EXPECTED_ASSET: roadster-e6bf26df66.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:

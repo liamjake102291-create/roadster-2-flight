@@ -12,10 +12,12 @@ import type { RootState } from '@react-three/fiber';
 import { clamp01, inspectionVisible } from './scroll/math';
 import { nextPlaybackTime } from './scroll/playback';
 
-import { playbackProgress, playbackSeconds } from './scene/launchTimeline';
+import { montage, playbackProgress, playbackSeconds } from './scene/launchTimeline';
 
 const INTERFACE_INTERVAL = 1000 / 20;
 const REPLAY_POINT = 0.9995;
+const beforeScan = montage.scan - 0.0002;
+const needsInterior = (p: number) => (p >= montage.scan && p < montage.nozzle) || (p > 0.45 && p < 0.86);
 
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -30,7 +32,7 @@ class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean
 function SceneFallback({ failed = false }: { failed?: boolean }) {
   return (
     <div className="scene-fallback">
-      <img src={import.meta.env.BASE_URL + 'roadster-poster.jpg'} alt="白色 Roadster 2 飞行概念车" />
+      <img src={document.querySelector('#flight-opening-placeholder img')?.getAttribute('src') ?? import.meta.env.BASE_URL + 'roadster-poster.jpg'} alt="白色 Roadster 2 飞行概念车" />
       <p role="status">{failed ? '3D 场景加载失败，请检查 WebGL 后刷新页面。' : '正在加载 3D 车辆'}</p>
     </div>
   );
@@ -43,6 +45,7 @@ interface CanvasProps extends NarrativeProps {
   selectedId: string;
   onSelect: (id: string) => void;
   onReady: () => void;
+  onInteriorReady: () => void;
   onCreated: (state: RootState) => void;
 }
 
@@ -77,6 +80,21 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
   const invalidate = useRef<(() => void) | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const interaction = useRef(false);
+  const [waiting, setWaiting] = useState(false);
+  const detailReady = useRef(false);
+  const deferred = useRef<{ progress?: number; mode?: ViewMode } | null>(null);
+  const onInteriorReady = useCallback(() => {
+    detailReady.current = true;
+    const request = deferred.current;
+    deferred.current = null;
+    setWaiting(false);
+    if (request?.progress !== undefined) {
+      update(request.progress);
+      syncScroll();
+    }
+    if (request?.mode) setMode(request.mode);
+    invalidate.current?.();
+  }, [syncScroll, update]);
   const onReady = useCallback(() => setSceneReady(true), []);
   const configureRenderer = useCallback(({ gl, invalidate: render }: RootState) => {
     invalidate.current = render;
@@ -108,12 +126,23 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
     if (visible) invalidate.current?.();
   }, [visible]);
 
+  const positionAt = useCallback((target: number) => {
+    deferred.current = null;
+    if (!detailReady.current && needsInterior(target)) {
+      deferred.current = { progress: target };
+      setWaiting(true);
+    } else {
+      update(target);
+      setWaiting(false);
+    }
+    syncScroll();
+    invalidate.current?.();
+  }, [syncScroll, update]);
+
   const seek = (target: number) => {
     interaction.current = true;
     setPlayState(false);
-    update(target);
-    syncScroll();
-    invalidate.current?.();
+    positionAt(target);
   };
 
   useEffect(() => {
@@ -125,8 +154,7 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
       if (Math.abs(value - progressRef.current) <= 1 / range) return;
       interaction.current = true;
       setPlayState(false);
-      update(value);
-      invalidate.current?.();
+      positionAt(value);
     };
     window.addEventListener('scroll', fromScroll, { passive: true });
     const onResize = () => { if (!running.current) syncScroll(); };
@@ -136,7 +164,7 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
       window.removeEventListener('scroll', fromScroll);
       window.removeEventListener('resize', onResize);
     };
-  }, [progressRef, setPlayState, syncScroll, update]);
+  }, [positionAt, progressRef, setPlayState, syncScroll]);
 
   useEffect(() => {
     if (!sceneReady || interaction.current) return;
@@ -159,8 +187,19 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
     };
     const step = (now: number) => {
       if (!running.current) return;
-      time = nextPlaybackTime(time, previous === undefined ? 0 : (now - previous) / 1000, end);
+      const next = nextPlaybackTime(time, previous === undefined ? 0 : (now - previous) / 1000, end);
       previous = now;
+      if (!detailReady.current && needsInterior(playbackProgress(next))) {
+        if (time < playbackSeconds(beforeScan)) {
+          time = playbackSeconds(beforeScan);
+          update(beforeScan);
+          invalidate.current?.();
+        }
+        setWaiting(true);
+        frame = requestAnimationFrame(step);
+        return;
+      }
+      time = next;
       const finished = time >= end;
       const publish = finished || now - lastPublish >= INTERFACE_INTERVAL;
       update(finished ? 1 : playbackProgress(time), publish);
@@ -197,6 +236,14 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
     setPlayState(false);
     update(progressRef.current);
     syncScroll();
+    deferred.current = null;
+    if (next === 'xray' && !detailReady.current) {
+      deferred.current = { mode: next };
+      setWaiting(true);
+      setSelectedId('battery');
+      return;
+    }
+    setWaiting(false);
     setMode(next);
     if (next === 'xray' && !inspectionVisible(progressRef.current)) setSelectedId('battery');
   };
@@ -209,6 +256,8 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
       syncScroll();
       return;
     }
+    deferred.current = null;
+    setWaiting(false);
     setMode('surface');
     if (progressRef.current >= REPLAY_POINT) {
       update(0);
@@ -221,8 +270,8 @@ function Experience({ onOpenLab }: { onOpenLab: () => void }) {
     <main ref={narrativeRef} className="narrative" id="experience">
       <div className="canvas-shell" data-mode={mode} data-inspection={mode === 'xray' || inspectionVisible(progress)}>
         <FlightCanvas progressRef={progressRef} reducedMotion={reducedMotion} mobile={mobile} visible={visible}
-          mode={mode} selectedId={selectedId} onSelect={setSelectedId} onReady={onReady} onCreated={configureRenderer} />
-        {!sceneReady && <div className="scene-loading" role="status">正在加载 3D 场景…</div>}
+          mode={mode} selectedId={selectedId} onSelect={setSelectedId} onReady={onReady} onInteriorReady={onInteriorReady} onCreated={configureRenderer} />
+        {(!sceneReady || waiting) && <div className="scene-loading" role="status">{waiting ? '正在加载内部总成…' : '正在加载 3D 场景…'}</div>}
       </div>
       <StoryOverlay progress={progress} playing={playing} mode={mode} onMode={changeMode}
         onSeek={seek} onPlay={play} onOpenLab={onOpenLab} />

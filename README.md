@@ -41,6 +41,6 @@ npm run test:e2e
 
 ## 更新 GitHub Pages
 
-运行 `npm ci` 安装依赖，再执行 `node scripts/build-pages.mjs`。把新生成的 `docs/` 和相应源码提交到 `main`。仓库 Pages 设置为 `main` 的 `/docs`。发布版首屏立即显示静态预览，随后下载保留 27 组总成的轻量演示模型。零件工坊中的整车视图按需加载完整 GLB。
+运行 `npm ci` 安装依赖，再执行 `node scripts/build-pages.mjs`。把新生成的 `docs/` 和相应源码提交到 `main`。仓库 Pages 设置为 `main` 的 `/docs`。发布版并行下载开场几何与程序，首屏静态预览内嵌在首页。车身及座舱可先开始渲染，内部总成随后加载，进入结构扫描前自动等待需要的资产。两批资产从同一演示模型无损拆分，零件工坊中的整车视图仍可按需加载完整 GLB。
 
 飞跃车列参考 [Roadster Liftoff 的 Lineup Jump](https://aashishgtbit.github.io/roadster-liftoff/)。车列与动作使用本站的几何与时间轴重建。
