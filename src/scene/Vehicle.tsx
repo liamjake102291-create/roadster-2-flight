@@ -40,9 +40,10 @@ interface VehicleProps {
   onSelect?: (id: string) => void;
   xray?: boolean;
   cinematic?: boolean;
+  software?: boolean;
 }
 
-export default function Vehicle({ progressRef, selectedId, onSelect, xray = false, cinematic = false }: VehicleProps) {
+export default function Vehicle({ progressRef, selectedId, onSelect, xray = false, cinematic = false, software = false }: VehicleProps) {
   const { scene } = useGLTF(getModelUrl());
   const parts = useMemo(() => {
     const model = scene.getObjectByName('Roadster_2_Concept') ?? scene;
@@ -51,7 +52,7 @@ export default function Vehicle({ progressRef, selectedId, onSelect, xray = fals
       if (!part) throw new Error('Unknown roadster assembly ' + source.name);
       const object = source.clone();
       const finishes: {
-        material: THREE.MeshStandardMaterial; glow: number; led: boolean; color: THREE.Color; emissive: THREE.Color;
+        material: THREE.MeshStandardMaterial | THREE.MeshLambertMaterial; glow: number; led: boolean; color: THREE.Color; emissive: THREE.Color;
       }[] = [];
       object.traverse((child) => {
         if (!(child instanceof THREE.Mesh)) return;
@@ -69,13 +70,24 @@ export default function Vehicle({ progressRef, selectedId, onSelect, xray = fals
           material.metalness = 0.27;
           if (material instanceof THREE.MeshPhysicalMaterial) material.clearcoatRoughness = 0.18;
         }
-        const led = material.name.startsWith('LED');
-        finishes.push({ material, glow: material.emissiveIntensity, led, color: material.color.clone(), emissive: material.emissive.clone() });
-        if (led) material.toneMapped = false;
+        const active = software ? new THREE.MeshLambertMaterial({
+          name: material.name,
+          color: material.color,
+          emissive: material.emissive,
+          emissiveIntensity: material.emissiveIntensity,
+          side: material.side,
+        }) : material;
+        if (software) {
+          material.dispose();
+          child.material = active;
+        }
+        const led = active.name.startsWith('LED');
+        finishes.push({ material: active, glow: active.emissiveIntensity, led, color: active.color.clone(), emissive: active.emissive.clone() });
+        if (led) active.toneMapped = false;
       });
       return { part, object, rest: source.position.clone(), finishes, ghost: false };
     });
-  }, [scene]);
+  }, [scene, software]);
 
   useEffect(() => () => {
     for (const { finishes } of parts) for (const { material } of finishes) material.dispose();

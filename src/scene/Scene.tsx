@@ -81,7 +81,7 @@ export default function Scene(props: SceneProps) {
       <GroundShadow progressRef={props.progressRef} mobile={props.mobile} />
       <JetPlumes progressRef={props.progressRef} reducedMotion={props.reducedMotion} mobile={props.mobile} />
       <PrelaunchEffects progressRef={props.progressRef} enabled={cinematic} />
-      <CarRig {...props} />
+      <CarRig {...props} software={software} />
       <CameraRig {...props} />
       {!props.mobile && !software && <EffectComposer multisampling={0}>
         <Bloom intensity={0.34} luminanceThreshold={1.05} luminanceSmoothing={0.60} mipmapBlur levels={4} />
