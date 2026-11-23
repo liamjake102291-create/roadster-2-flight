@@ -52,7 +52,7 @@ const FlightCanvas = memo(function FlightCanvas({ mobile, visible, onCreated, ..
       <Canvas
         dpr={[0.8, mobile ? 1 : 1.25]}
         camera={{ position: [5.1, 1.78, -6.75], fov: 36, near: 0.045, far: 110 }}
-        gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+        gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
         frameloop={visible ? 'demand' : 'never'}
         fallback={<SceneFallback failed />}
         onCreated={onCreated}

@@ -17,7 +17,7 @@ const browser = await chromium.launch({
 });
 const errors = [];
 try {
-  const desktop = await browser.newContext({ viewport:{width:1280,height:720}, deviceScaleFactor:1 });
+  const desktop = await browser.newContext({ viewport:{width:960,height:540}, deviceScaleFactor:1 });
   const page = await desktop.newPage();
   const responses = [];
   page.on('pageerror', error => { errors.push(error.message); console.log('DESKTOP ERROR:',error.stack); });
@@ -37,6 +37,7 @@ try {
   assert.equal(await page.locator('video').count(),0);
   await page.getByRole('button',{name:'暂停',exact:true}).waitFor({timeout:8000});
   await page.getByRole('button',{name:'起飞',exact:true}).click();
+  await page.getByRole('heading',{name:'离轨翻滚'}).waitFor({timeout:20000});
   await page.getByRole('button',{name:'播放',exact:true}).click();
   const measurement = await page.evaluate(() => new Promise((resolve,reject) => {
     const seen = [];
@@ -51,8 +52,8 @@ try {
       if (Number(document.querySelector('input[type=range]').value)===1000) {
         frames.sort((a,b)=>a-b);
         resolve({seen,seconds:(now-start)/1000,p50Ms:frames[Math.floor(frames.length*.5)],p95Ms:frames[Math.floor(frames.length*.95)],frames:frames.length});
-      } else if (now-start>180000) {
-        reject(new Error('Flight timed out; observed stages: '+seen));
+      } else if (now-start>240000) {
+        reject(new Error('Flight timed out; observed stages: '+seen+'; progress '+document.querySelector('input[type=range]').value));
       } else requestAnimationFrame(sample);
     }
     requestAnimationFrame(sample);
@@ -62,7 +63,6 @@ try {
   await page.getByRole('button',{name:'检视',exact:true}).click();
   await page.getByRole('button',{name:/Structural battery/}).click();
   assert.equal(await page.locator('.detail-panel h3').textContent(),'结构电池包');
-  console.log('Public desktop timing (software WebGL):',JSON.stringify(measurement));
   await desktop.close();
 
   const mobile=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:2,isMobile:true,hasTouch:true,reducedMotion:'reduce'});

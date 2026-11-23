@@ -9,10 +9,11 @@ interface CarRigProps extends NarrativeProps {
   selectedId: string;
   onSelect: (id: string) => void;
   mobile: boolean;
+  software: boolean;
   mode: ViewMode;
 }
 
-export default function CarRig({ progressRef, selectedId, onSelect, mode }: CarRigProps) {
+export default function CarRig({ progressRef, selectedId, onSelect, mode, software }: CarRigProps) {
   const root = useRef<THREE.Group>(null);
   useFrame(() => {
     if (!root.current) return;
@@ -25,7 +26,7 @@ export default function CarRig({ progressRef, selectedId, onSelect, mode }: CarR
   return (
     <group ref={root}>
       <Vehicle progressRef={progressRef} selectedId={selectedId} onSelect={onSelect}
-        xray={mode === 'xray'} cinematic={mode === 'surface'} />
+        software={software} xray={mode === 'xray'} cinematic={mode === 'surface'} />
     </group>
   );
 }
