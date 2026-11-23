@@ -17,7 +17,11 @@ jobs:
       - run: npx playwright install chromium --only-shell
       - run: node tests/pages-live.mjs
         env:
-          EXPECTED_ASSET: roadster-709551e741.js
-
-
-
+          EXPECTED_ASSET: roadster-a4f9323aad.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lineup-and-ramp
+          path: |
+            lineup.png
+            ramp.png
